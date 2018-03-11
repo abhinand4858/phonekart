@@ -8,21 +8,22 @@ var router = express.Router();
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
+var temp;
 
 var salesRecord = [ 
-    { model: "Note4", quantity: 10, customer: "ram1989", invoiceNumber: "AA000", returned: false}
+    { model: "Note4", quantity: 10, customer: "ram1989", invoiceNumber: "AA000", returned: false, sale: false}
 ];
 
 var deals = [
-    { model: "Note4", quantity: 10, price: 1000}
+    { model: "Note4", quantity: 5, price: 1000, sold : 0, status : 'close' }
 ];
 
 
 var phones = [
-        { model: "Note", manufacturer: "Samsung", price: 10000, quantity: 10  },
+        { model: "Note4", manufacturer: "Samsung", price: 10000, quantity: 10  },
         { model: "S9", manufacturer: "Samsung", price: 60000, quantity: 6 },
         { model: "Note5", manufacturer: "Redmi", price: 12000, quantity: 5 },
-        { model: "Note4", manufacturer: "Redmi", price: 9000, quantity: 15  },
+        { model: "5A", manufacturer: "Redmi", price: 9000, quantity: 15  },
         { model: "G5s", manufacturer: "Moto", price: 16000, quantity: 9 },
         { model: "Z2", manufacturer: "Moto", price: 24000, quantity: 2 },
         { model: "H1", manufacturer: "Honor", price: 18000, quantity: 5 },
@@ -32,14 +33,14 @@ var phones = [
 ];
 
 app.get('/', function (req, res) {
-  console.log("Hello world");
-  res.send('Hello world');
+    console.log("Hello world");
+    res.send("Welcome to phoneKart!");
 })
 
 app.get('/get-items', function (req, res) {
 
     var key;
-    var ph;
+    var ph = [];
 
     if (key = req.param('manufacturer')){
         for (var i=0; i<phones.length; i+=1) {
@@ -68,24 +69,44 @@ app.get('/get-items', function (req, res) {
     }
     
     if (key = req.param('max-price')) {
-        for (var i=0; i<ph.length; i+=1) {
-            if (ph[i].price > key) {
-                ph.splice(i, 1);
-                i--;
+        if(ph.length>0) {
+            for (var i=0; i<ph.length; i+=1) {
+                if (ph[i].price > key) {
+                    ph.splice(i, 1);
+                    i--;
+                }
+            } 
+        } else {   //if max-price is the first param
+            for (var i=0; i<phones.length; i+=1) {
+                if (phones[i].price < key) {
+                    ph.push(phones[i]); 
+                }
             }
-        }
+        }  
+        
     }
     
     if (key = req.param('min-price')) {
-        for (var i=0; i<ph.length; i+=1) {
-            if (ph[i].price < key) {
-                ph.splice(i, 1);
-                i--;
+        if(ph.length>0) {
+            for (var i=0; i<ph.length; i+=1) {
+                if (ph[i].price < key) {
+                    ph.splice(i, 1);
+                    i--;
+                }
             }
-        }
+        } else {   //if min-price is the first param
+            for (var i=0; i<phones.length; i+=1) {
+                if (phones[i].price > key) {
+                    ph.push(phones[i]); 
+                }
+            }
+        }  
+
     }
     
-    res.send(ph);
+    if (ph.length >0) 
+        res.send(ph);
+    else res.send(phones);
 })
 
 function getInvoice() {
@@ -105,42 +126,62 @@ function getInvoice() {
 
 app.get('/buy', function (req, res){
     
-    var mod, cus, inv, f=0, curr;
-    if(cus = req.param('cus-id')) {
-        if (mod = req.param('model')) {
+    var mod, cus, inv, qty, curr, f=0;
+
+    cus = req.param('cus-id');
+    mod = req.param('model');
+    qty = req.param('quantity');
+
+    
+    if (cus && mod && qty) {
+        //check if deal is available for specific model
+        for (var i=0; i<deals.length; i+=1) {
+            if(deals[i].model.toLowerCase() == mod.toLowerCase() && deals[i].quantity-deals[i].sold >= qty && deals[i].status == 'open') {
+                curr = getInvoice();
+                //duplicate invoices are handled here
+                for(var j=0;j<salesRecord.length;j++) {
+                    if(salesRecord[j].invoiceNumber == curr) {
+                        j=-1;
+                        curr = getInvoice();
+                    }
+                }
+                salesRecord.push({model:deals[i].model, quantity:qty, customer:cus, invoiceNumber:curr, returned: false, sale: true });
+                phones[i].quantity-=qty;
+                deals[i].sold+=qty;
+                f=1;
+            }
+        }
+
+        if(f==0) {
+        //handle order not in sale
             for (var i=0; i<phones.length; i+=1) {
+
                 if (phones[i].model.toLowerCase() == mod.toLowerCase()) {
                     
-                    //stock left (quantity) > 0
+                    //checks stock left (quantity)
                     if(phones[i].quantity <= 0) {
                         res.send(mod+" sold out. Currently out of stock!");
-                    }
+                    } else if(phones[i].quantity >= qty) {
 
-                    //check if the same customer have bought the same model before
-                    for(var j=0;j<salesRecord.length;j++) {
-                        if(salesRecord[j].customer.toLowerCase() == cus.toLowerCase() && salesRecord[j].model.toLowerCase() == mod.toLowerCase()) {
-                            salesRecord[j].quantity++;
-                            f=1;
-                        }
-                    }
-
-                    if (f == 0) {
                         curr = getInvoice();
+
+                        //duplicate invoices are handled here
                         for(var j=0;j<salesRecord.length;j++) {
                             if(salesRecord[j].invoiceNumber == curr) {
-                                j=0;
+                                j=-1;
                                 curr = getInvoice();
                             }
-                        }
-                        console.log("returned");
-                        salesRecord.push({model:phones[i].model, quantity:1, customer:cus, invoiceNumber:curr, returned: false});
+                        }                   
+                        salesRecord.push({model:phones[i].model, quantity:qty, customer:cus, invoiceNumber:curr, returned: false, sale: false});
+                        phones[i].quantity-=qty;
                     }
-                    phones[i].quantity-=1;
-                    res.send(salesRecord);
                 }
             }
-        } else res.send("Pass specific model");
-    }
+        }
+
+        res.send(salesRecord); 
+
+    } else res.send("Pass model, customer-id, quantity");
 
 })
 
@@ -157,15 +198,14 @@ app.get('/return', function (req, res) {
 
         for(var i=0;i<salesRecord.length;i++) {
             //if invoice matches
-            if (salesRecord[i].invoiceNumber == key && salesRecord[i].returned  == false) {
+            if (salesRecord[i].invoiceNumber == key && salesRecord[i].returned  == false && salesRecord[i].sale == false) {
                 for (var j=0; j<phones.length; j+=1) {
                     //finding invoice model in phones
                     if (phones[j].model.toLowerCase() == salesRecord[i].model.toLowerCase()) {
                         phones[j].quantity+=salesRecord[i].quantity;
                         salesRecord[i].returned = true;
                     }
-                }
-                
+                }  
             }
         }
         res.send(salesRecord);
@@ -185,17 +225,28 @@ app.get('/start-deal', function (req, res) {
 
     if (mod && qty && price && time) {
         for(var i=0;i<phones.length;i++) {
-            if(phones[i].model == mod && phones[i].quantity > qty) {
-                deals.push({model:mod, quantity:qty, 'price':price});
+            if(phones[i].model.toLowerCase() == mod.toLowerCase() && phones[i].quantity > qty) {
+                deals.push({model:phones[i].model, quantity:qty,'price':price, sold: 0, status: 'open' });
+
+                temp = phones[i].price; 
+                phones[i].price = price;
+                //disabling the status flag after given time
                 setTimeout(function() {
                     for(var j=0;j<deals.length;j++) {
-                        if (deals[j].model == mod) deals.splice(i)
+                        if (deals[j].model.toLowerCase() == mod.toLowerCase()) deals[j].status = 'close';
                     }
-                }, time)
+                    phones[i].price = temp;                    
+                }, time);
+                res.send("Deal added");
             }
         }
-    } else res.send('Pass all the params');
-    res.send("done");
+    } else res.send('Pass model name, quantity, price and time of deal');
+    
+})
+
+//list out the deals
+app.get('/show-deals', function (req, res) {
+    res.send(deals);
 })
 
 app.listen(9999, function (err) {

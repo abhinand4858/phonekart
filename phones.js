@@ -147,7 +147,7 @@ app.get('/buy', function (req, res){
                 }
                 salesRecord.push({model:deals[i].model, quantity:qty, customer:cus, invoiceNumber:curr, returned: false, sale: true });
                 phones[i].quantity-=qty;
-                deals[i].sold+=qty;
+                deals[i].sold=parseInt(deals[i].sold)+parseInt(qty);
                 f=1;
             }
         }
@@ -213,7 +213,14 @@ app.get('/return', function (req, res) {
     }
 })
 
-
+//function to close the deal on timeout
+function disable(i, temp, mod) { 
+    for(var j=0;j<deals.length;j++) {
+        if (deals[j].model.toLowerCase() == mod.toLowerCase()) deals[j].status = 'close';
+    }
+    console.log("i="+i)
+    phones[i].price = temp;  
+}
 
 app.get('/start-deal', function (req, res) {
     var mod, qty, price, time;
@@ -230,12 +237,10 @@ app.get('/start-deal', function (req, res) {
 
                 temp = phones[i].price; 
                 phones[i].price = price;
+                var pos = i;
                 //disabling the status flag after given time
                 setTimeout(function() {
-                    for(var j=0;j<deals.length;j++) {
-                        if (deals[j].model.toLowerCase() == mod.toLowerCase()) deals[j].status = 'close';
-                    }
-                    phones[i].price = temp;                    
+                    disable(pos, temp, mod);
                 }, time);
                 res.send("Deal added");
             }

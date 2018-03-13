@@ -213,7 +213,7 @@ app.get('/return', function (req, res) {
     }
 })
 
-//function to close the deal on timeout
+//close the deal on timeout
 function disable(i, temp, mod) { 
     for(var j=0;j<deals.length;j++) {
         if (deals[j].model.toLowerCase() == mod.toLowerCase()) deals[j].status = 'close';
